@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Secure Access Gateway</title>
+  <style>
+    :root { --bg:#0d0d0d; --fg:#fff; --muted:#b3b3b3; --brand:#22c55e; --danger:#ef4444; }
+    *{box-sizing:border-box}
+    body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; background:var(--bg); color:var(--fg);}
+    .wrap{max-width:680px; margin:40px auto; padding:24px;}
+    .card{background:#111; border:1px solid #222; border-radius:20px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,.4);}
+    h1{margin:0 0 8px; font-size:28px}
+    p{margin:6px 0; color:var(--muted)}
+    .btn{display:inline-flex; align-items:center; gap:10px; padding:14px 18px; border-radius:14px; background:var(--brand);
+      color:#08130a; font-weight:700; border:none; cursor:pointer; font-size:16px; transition:transform .05s ease;}
+    .btn:active{transform:translateY(1px)}
+    .btn[disabled]{opacity:.5; cursor:not-allowed}
+    .row{display:flex; gap:12px; flex-wrap:wrap; margin-top:16px}
+    .chip{padding:8px 12px; border-radius:999px; background:#181818; border:1px solid #232323; color:#c9c9c9; font-size:13px}
+    .prog{height:10px; background:#1a1a1a; border-radius:999px; overflow:hidden; border:1px solid #222; margin:14px 0 6px}
+    .bar{height:100%; width:0%; background:linear-gradient(90deg,#22c55e,#16a34a)}
+    .log{margin-top:18px; background:#0f0f0f; border:1px solid #222; border-radius:16px; padding:14px; max-height:220px; overflow:auto; font-size:13px}
+    .tip{font-size:12px; color:#9aa}
+    .danger{color:var(--danger); font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Secure Access Gateway</h1>
+      <p>পরবর্তী কন্টেন্টে যেতে <strong>Open Next</strong> ক্লিক করুন। প্রতিটি ধাপে একটি নতুন ট্যাব খুলবে।</p>
+
+      <div class="row">
+        <span class="chip" id="statusChip">Step 0 / 10</span>
+        <span class="chip" id="cooldownChip">Ready</span>
+      </div>
+
+      <div class="prog"><div class="bar" id="bar"></div></div>
+      <p class="tip">Note: এক ক্লিকে একটাই ট্যাব খোলে—এটাই ব্রাউজার/এড নেটওয়ার্কের নিয়মের সঙ্গে সামঞ্জস্যপূর্ণ।</p>
+
+      <button class="btn" id="openBtn">
+        🔓 Open Next
+      </button>
+
+      <div class="log" id="log"></div>
+
+      <p class="tip">
+        ✅ ভালো প্র্যাকটিস: real user click → নতুন ট্যাব → কন্টেন্ট।<br/>
+        ⚠️ <span class="danger">Auto multi-tab বা forced redirects</span> করলে অ্যাকাউন্ট রিস্ক বাড়ে।
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // --- Your monetized links (ordered) ---
+    const links = [
+      "https://www.revenuecpmgate.com/tdktae8wh?key=45871b4a16d726563e86febbf5cceecf",
+      "https://www.revenuecpmgate.com/yebn0kiq7?key=48bf70a60cf5d515a2fe21a53e858a03",
+      "https://www.revenuecpmgate.com/frhb1u7s?key=e30eb46803b4577ec54b211b55673c69",
+      "https://www.revenuecpmgate.com/dkp02xsrem?key=0c4b08b847d3cd5258cc86f82ac4ae96",
+      "https://www.revenuecpmgate.com/rhehv4qc7?key=d6e8adfaadb70fb6aee1fd0c99730d22",
+      "https://www.revenuecpmgate.com/qz1pm0zy9?key=ce6ee83d4607856b5382e048fc43c0fc",
+      "https://www.revenuecpmgate.com/fgrdxxcd?key=a5cd666eddae5c266ecedca6fcdf086e",
+      "https://www.revenuecpmgate.com/hwh0shg1e?key=0be751bce0f004f5a676a4a32c3a993d",
+      "https://www.revenuecpmgate.com/h3p8bf3ts?key=fe07c51715314c0a037c45409ce20fbf",
+      "https://www.revenuecpmgate.com/efczd4ebi?key=477ed64a83e1ca6192ab2fa91a117a14"
+    ];
+
+    // --- Config ---
+    const cooldownSeconds = 8;  // প্রতি ধাপে ন্যূনতম সময় (UX + policy friendly)
+    const requireFocus = true;  // ট্যাব inactive হলে বাটন অন হবে না
+
+    // --- State ---
+    let idx = parseInt(sessionStorage.getItem("gw_idx") || "0", 10);
+    let cooling = false;
+    let cooldownLeft = 0;
+    const btn = document.getElementById("openBtn");
+    const chip = document.getElementById("statusChip");
+    const cdChip = document.getElementById("cooldownChip");
+    const bar = document.getElementById("bar");
+    const logBox = document.getElementById("log");
+
+    function log(msg){
+      const t = new Date().toLocaleTimeString();
+      logBox.innerHTML = `<div>[${t}] ${msg}</div>` + logBox.innerHTML;
+    }
+
+    function updateUI(){
+      chip.textContent = `Step ${Math.min(idx, links.length)} / ${links.length}`;
+      if(cooling){
+        btn.setAttribute("disabled","disabled");
+        cdChip.textContent = `Wait ${cooldownLeft}s`;
+      } else if(requireFocus && document.hidden){
+        btn.setAttribute("disabled","disabled");
+        cdChip.textContent = `Return to tab`;
+      } else if(idx >= links.length){
+        btn.setAttribute("disabled","disabled");
+        cdChip.textContent = `Completed`;
+        bar.style.width = "100%";
+      } else {
+        btn.removeAttribute("disabled");
+        cdChip.textContent = `Ready`;
+      }
+      bar.style.width = `${(idx/links.length)*100}%`;
+    }
+
+    function startCooldown(){
+      cooling = true;
+      cooldownLeft = cooldownSeconds;
+      updateUI();
+      const timer = setInterval(()=>{
+        cooldownLeft--;
+        if(cooldownLeft <= 0){ clearInterval(timer); cooling = false; }
+        updateUI();
+      }, 1000);
+    }
+
+    function openNext(){
+      if(idx >= links.length) return;
+      // Try to open in a new tab from a user gesture
+      const url = links[idx];
+      const win = window.open(url, "_blank", "noopener");
+      if(!win){
+        // Popup blocked fallback: same-tab navigate after confirm
+        if(confirm("Your browser blocked the popup. Open here instead?")){
+          window.location.href = url;
+        } else {
+          log("Popup blocked. User cancelled.");
+          return;
+        }
+      }
+      log(`Opened step ${idx+1}: ${url}`);
+      idx++;
+      sessionStorage.setItem("gw_idx", String(idx));
+      startCooldown();
+      updateUI();
+    }
+
+    btn.addEventListener("click", openNext);
+    document.addEventListener("visibilitychange", updateUI);
+    window.addEventListener("focus", updateUI);
+
+    updateUI();
+  </script>
+</body>
+</html>
